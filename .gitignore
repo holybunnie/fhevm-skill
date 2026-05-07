@@ -1,0 +1,11 @@
+node_modules
+cache
+artifacts
+.env
+coverage
+dist
+fhevm-trace-output
+fhevm-attack-output
+types
+fhevmTemp
+*.tsbuildinfo

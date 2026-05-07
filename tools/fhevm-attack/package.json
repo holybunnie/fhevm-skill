@@ -1,0 +1,10 @@
+{
+  "name": "fhevm-attack",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Trace-directed dynamic attack generator for FHEVM contracts",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node test/run.test.js"
+  }
+}

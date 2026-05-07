@@ -1,0 +1,17 @@
+{
+  "name": "fhevm-skill",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-agent skill for writing correct FHEVM smart contracts, with static analysis, attack generation, and deployment tooling",
+  "workspaces": [
+    "tools/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-network-helpers": "1.1.2"
+  }
+}
