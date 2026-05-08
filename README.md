@@ -2,7 +2,7 @@
 
 **fhevm-skill** is a comprehensive AI agent skill for writing correct FHEVM smart contracts on Zama Protocol. Built as a [Zama Developer Program Mainnet Season 2](https://docs.zama.org) bounty submission, it is optimized for Claude Code, Cursor, and Windsurf.
 
-Unlike a standalone linter, fhevm-skill provides a **closed feedback loop**: write contracts with SKILL.md guidance, statically analyze them with `fhevm-trace`, generate and run exploit tests with `fhevm-attack`, patch, and deploy. Every step is automated and machine-checkable.
+fhevm-skill provides a **closed feedback loop**: write contracts with SKILL.md guidance, statically analyze them with `fhevm-trace`, generate and run exploit tests with `fhevm-attack`, patch, and deploy. Every step is automated and machine-checkable.
 
 ## Core Components
 
