@@ -35,12 +35,51 @@ graph LR
 5. **Ship** — Compile, run happy-path tests, verify all attacks blocked
 6. **Deploy** — Push to Sepolia with Etherscan verification
 
-## Getting Started
+## Quick Install — Load the Skill into Your AI Agent
+
+Clone the repo and install dependencies:
 
 ```bash
-git clone <repo-url> && cd fhevm-skill
+git clone https://github.com/holybunnie/fhevm-skill.git && cd fhevm-skill
 npm install
 ```
+
+Then point your AI agent at the skill file:
+
+- **Claude Code**: Open the repo folder. Claude Code automatically picks up `SKILL.md` from the workspace. You can also run `claude` from inside the repo directory.
+- **Cursor**: Open the repo folder, then add `SKILL.md` to your project context via `@SKILL.md` in chat. For frontend work, also add `@frontend/SKILL.md`.
+- **Windsurf**: Open the repo folder. Reference `SKILL.md` in your prompt or attach it as context.
+- **Any LLM agent**: Paste the contents of `SKILL.md` into the system prompt or context window. For frontend work, also include `frontend/SKILL.md`.
+
+That's it. The agent now knows how to write correct FHEVM contracts, use the ACL system, avoid all 13 anti-patterns, and run the closed-loop workflow.
+
+## Use It — Prompt Your Agent with Natural Language
+
+Once the skill is loaded, just ask your AI agent what you want to build. Here are real examples:
+
+### Build a confidential lending app from scratch
+
+> "Build me a confidential lending protocol on FHEVM. Users should be able to deposit encrypted collateral (euint64), borrow up to 50% LTV, and repay. Use MockCUSDT as the token. Make sure all balances are encrypted, ACL grants are correct, and no anti-patterns are present. Then run fhevm-trace on it to verify."
+
+The agent will:
+1. Scaffold a Hardhat project with `@fhevm/solidity` v0.9+ and `ZamaEthereumConfig`
+2. Write the contracts using `FHE.select` instead of `if/else` on encrypted values (AP-001)
+3. Add `FHE.allowThis` for persisted storage handles (AP-003) and `FHE.allow` for user-decryptable values (AP-004)
+4. Use the returned transfer amount, not the requested amount (AP-009)
+5. Run `fhevm-trace` to confirm 0 findings
+6. Write tests that encrypt inputs, call the contract, decrypt results, and assert
+
+### Build a sealed-bid auction
+
+> "Create a confidential sealed-bid auction where bids are encrypted. The highest bidder wins but no one can see other bids. Use FHE.select for comparisons, add overflow guards, and schedule disclosure with a finality delay so the winner isn't revealed in the same block as the auction end."
+
+### Add a frontend for an existing FHEVM contract
+
+> "I have a ConfidentialLending contract deployed on Sepolia. Build me a React frontend with Vite and viem that encrypts deposit amounts client-side using @zama-fhe/relayer-sdk, and decrypts the user's balance using EIP-712 userDecrypt."
+
+### Audit an existing contract
+
+> "Run fhevm-trace on my contract at contracts/MyToken.sol. If it finds any anti-pattern violations, explain what's wrong and fix them. Then run fhevm-attack to confirm the fixes block all exploits."
 
 ### Run the closed-loop demo
 
