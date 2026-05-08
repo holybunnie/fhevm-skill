@@ -6,7 +6,9 @@ import { NetworkSwitcher } from "./components/NetworkSwitcher";
 import { DepositPanel } from "./components/DepositPanel";
 import { BorrowPanel } from "./components/BorrowPanel";
 import { RepayPanel } from "./components/RepayPanel";
+import { WithdrawPanel } from "./components/WithdrawPanel";
 import { BalanceDisplay } from "./components/BalanceDisplay";
+import { MintPanel } from "./components/MintPanel";
 
 export function App() {
   const [account, setAccount] = useState<`0x${string}` | null>(null);
@@ -56,10 +58,13 @@ export function App() {
               </p>
             </div>
 
+            <MintPanel account={account} />
+
             <BalanceDisplay account={account} />
 
-            <div className="grid gap-6 md:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
               <DepositPanel account={account} />
+              <WithdrawPanel account={account} />
               <BorrowPanel account={account} />
               <RepayPanel account={account} />
             </div>

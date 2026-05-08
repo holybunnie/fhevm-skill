@@ -479,13 +479,13 @@ function finalizeAuction() external {
 **Step 2 — Off-chain: decrypt via relayer SDK**
 
 ```typescript
-import { RelayerClient } from "@zama-fhe/relayer-sdk";
+// In frontend code, use the web bundle:
+import { getFhevmInstance } from "../lib/fhevm";  // see frontend/SKILL.md
 
-const relayer = new RelayerClient({ url: RELAYER_URL });
-const result = await relayer.publicDecrypt([handle]);
-// result.clearValues — the decrypted values
-// result.abiEncodedClearValues — ABI-encoded for on-chain submission
-// result.decryptionProof — KMS signatures
+const fhevm = await getFhevmInstance();
+const cleartext = await fhevm.publicDecrypt(handle);
+// For on-chain verification, use publicDecryptWithProof:
+// const { value, signatures } = await fhevm.publicDecryptWithProof(handle);
 ```
 
 **Step 3 — On-chain: verify and use cleartext**
@@ -528,16 +528,34 @@ const clearBalance = await fhevm.userDecryptEuint(
 **Off-chain (frontend with relayer SDK)**:
 
 ```typescript
-import { RelayerClient } from "@zama-fhe/relayer-sdk";
+import { getFhevmInstance } from "../lib/fhevm";  // see frontend/SKILL.md
 
-const relayer = new RelayerClient({ url: RELAYER_URL });
-// User signs an EIP-712 message proving they own the address with ACL access
-const result = await relayer.userDecrypt(
-    [handle],
-    contractAddress,
-    signer  // viem WalletClient or ethers Signer
+const fhevm = await getFhevmInstance();
+const keypair = fhevm.generateKeypair();
+const contractAddresses = [contractAddress];
+const startTimeStamp = Math.floor(Date.now() / 1000);
+const durationDays = 10;
+const eip712 = fhevm.createEIP712(keypair.publicKey, contractAddresses, startTimeStamp, durationDays);
+
+// User signs the EIP-712 message proving ACL access
+const signer = await new BrowserProvider(window.ethereum).getSigner();
+const signature = await signer.signTypedData(
+    eip712.domain,
+    { UserDecryptRequestVerification: [...eip712.types.UserDecryptRequestVerification] },
+    eip712.message
 );
-const clearValue = result.clearValues[0];
+
+const results = await fhevm.userDecrypt(
+    [{ handle, contractAddress }],
+    keypair.privateKey,
+    keypair.publicKey,
+    signature.replace("0x", ""),
+    contractAddresses,
+    userAddress,
+    startTimeStamp,
+    durationDays
+);
+const clearValue = results[0];
 ```
 
 The EIP-712 signature proves to the KMS that the requester owns the address that was granted ACL access. Without this signature, anyone could request decryption of any handle they know about.

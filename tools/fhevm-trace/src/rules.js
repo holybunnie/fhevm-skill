@@ -321,4 +321,83 @@ function runAllRules(contractAnalysis, source, lines, filePath) {
   return deduped;
 }
 
-module.exports = { runAllRules, resetCounter };
+// AP-006-EXT: Cross-contract ACL leak detection (one level deep)
+// Pattern: Contract A persistent-allows handle to Contract B, calls B.method(handle),
+// and inside B, method does FHE.allow(result, msg.sender). An attacker proxy
+// calling through A gets the result disclosed.
+function detectCrossContractLeak(allContracts, contractMap, importGraph) {
+  resetCounter();
+  const findings = [];
+
+  for (const contractA of allContracts) {
+    // Find persistent allows to external addresses that match known contract names
+    for (const grant of contractA.aclGrants) {
+      if (grant.type !== "persistent" || grant.method !== "allow") continue;
+
+      // Check if grantee is address(someVar) where someVar is a known contract
+      // The expressionToString may produce "address(...)" so also check snippet
+      let targetVarName = null;
+      const addrMatch = grant.grantee.match(/^address\((\w+)\)$/);
+      if (addrMatch && addrMatch[1] !== "this") {
+        targetVarName = addrMatch[1];
+      } else {
+        // Fallback: parse from snippet e.g. "FHE.allow(value, address(helperB));"
+        const snippetMatch = (grant.snippet || "").match(/address\((\w+)\)/);
+        if (snippetMatch && snippetMatch[1] !== "this") {
+          targetVarName = snippetMatch[1];
+        }
+      }
+      if (!targetVarName) continue;
+
+      // Look up the type of that variable — is it a known contract?
+      const varType = contractA.stateVars[targetVarName] || null;
+      if (!varType) continue;
+
+      const targetContract = contractMap.get(varType);
+      if (!targetContract) continue;
+
+      // Check if contractA imports the target contract
+      const imports = importGraph.get(contractA.name) || [];
+      if (!imports.includes(varType)) continue;
+
+      // Now check: does the target contract have a function that does FHE.allow(x, msg.sender)?
+      for (const func of targetContract.functions) {
+        const hasMsgSenderAllow = func.aclGrants.some(
+          g => g.method === "allow" && g.grantee === "msg.sender"
+        );
+        if (!hasMsgSenderAllow) continue;
+
+        // Check if contractA calls this function in the same function as the persistent allow
+        const callerFunc = contractA.functions.find(f => f.name === grant.function);
+        if (!callerFunc) continue;
+
+        const callsTarget = callerFunc.externalCalls.some(
+          c => c.functionName === func.name || c.functionName === `${targetVarName}.${func.name}`
+        );
+
+        // Also check via source text — the AST might not capture all external calls perfectly
+        // Use a heuristic: if the function has an external call returning encrypted and we found the allow
+        const hasExternalReturn = callerFunc.externalCalls.length > 0;
+
+        if (callsTarget || hasExternalReturn) {
+          findings.push({
+            id: nextId(),
+            rule: "AP-006-EXT",
+            severity: "error",
+            file: contractA.file,
+            line: grant.line,
+            function: grant.function,
+            message: `Cross-contract ACL leak: ${contractA.name}.${grant.function}() persistent-allows handle to ${varType}, which grants result to msg.sender. Attacker proxy can route through ${contractA.name} to extract encrypted data.`,
+            snippet: grant.snippet || "",
+            suggested_attack: "acl-leak-via-proxy",
+          });
+          break; // One finding per grant is enough
+        }
+      }
+    }
+  }
+
+  return findings;
+}
+
+module.exports = { runAllRules, resetCounter, detectCrossContractLeak };

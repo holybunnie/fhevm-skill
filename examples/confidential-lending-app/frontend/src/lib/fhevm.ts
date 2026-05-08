@@ -1,27 +1,21 @@
-import { createInstance, SepoliaConfigV2 } from "@zama-fhe/relayer-sdk/web";
-import type { FhevmInstance } from "@zama-fhe/relayer-sdk/web";
-import { chain } from "./client";
+type FhevmInstance = import("@zama-fhe/relayer-sdk/web").FhevmInstance;
 
-let instance: FhevmInstance | null = null;
+let instancePromise: Promise<FhevmInstance> | undefined;
 
 export async function getFhevmInstance(): Promise<FhevmInstance> {
-  if (instance) return instance;
-
-  if (chain.id !== 11155111) {
-    throw new Error(
-      "FHEVM encryption requires Sepolia network. " +
-      "Switch your wallet to Sepolia to use encrypted operations. " +
-      "Local Hardhat FHE is only available via 'npx hardhat test'."
-    );
+  if (!instancePromise) {
+    instancePromise = (async () => {
+      const sdk = await import("@zama-fhe/relayer-sdk/web");
+      await sdk.initSDK();
+      return sdk.createInstance({
+        ...sdk.SepoliaConfig,
+        network: window.ethereum,
+      });
+    })();
   }
-
-  instance = await createInstance({
-    ...SepoliaConfigV2,
-    network: window.ethereum,
-  });
-  return instance;
+  return instancePromise;
 }
 
 export function resetFhevmInstance() {
-  instance = null;
+  instancePromise = undefined;
 }

@@ -94,6 +94,42 @@ contract ConfidentialLending is ZamaEthereumConfig {
         FHE.allow(newDebt, msg.sender); // AP-004
     }
 
+    /// @notice Withdraw collateral (capped at available collateral minus outstanding debt coverage)
+    /// @dev AP-001: select-based clamping, no branching on encrypted
+    function withdraw(externalEuint64 encAmount, bytes calldata proof) external {
+        euint64 requestedAmount = FHE.fromExternal(encAmount, proof);
+
+        euint64 collateral = _collateral[msg.sender];
+        euint64 debt = _debt[msg.sender];
+
+        // Must keep enough collateral to cover debt at LTV ratio
+        // minCollateral = debt * LTV_DENOMINATOR / LTV_NUMERATOR = debt * 2
+        euint64 minCollateral;
+        if (FHE.isInitialized(debt)) {
+            minCollateral = FHE.div(FHE.mul(debt, LTV_DENOMINATOR), LTV_NUMERATOR);
+        } else {
+            minCollateral = FHE.asEuint64(0);
+        }
+
+        // Available to withdraw = collateral - minCollateral (clamped to 0)
+        ebool hasExcess = FHE.ge(collateral, minCollateral);
+        euint64 available = FHE.select(hasExcess, FHE.sub(collateral, minCollateral), FHE.asEuint64(0));
+
+        // Clamp requested to available
+        ebool withinAvailable = FHE.le(requestedAmount, available);
+        euint64 actualWithdraw = FHE.select(withinAvailable, requestedAmount, FHE.asEuint64(0));
+
+        // Update collateral
+        euint64 newCollateral = FHE.sub(collateral, actualWithdraw);
+        _collateral[msg.sender] = newCollateral;
+        FHE.allowThis(newCollateral); // AP-003
+        FHE.allow(newCollateral, msg.sender); // AP-004
+
+        // Transfer tokens back to user
+        FHE.allowTransient(actualWithdraw, address(token));
+        token.transfer(msg.sender, actualWithdraw);
+    }
+
     /// @notice Get user's encrypted collateral balance
     function getCollateral(address user) external view returns (euint64) {
         return _collateral[user];

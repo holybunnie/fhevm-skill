@@ -4,8 +4,8 @@
 
 const fs = require("fs");
 const path = require("path");
-const { parseFile } = require("./parser");
-const { runAllRules } = require("./rules");
+const { parseFile, extractImports } = require("./parser");
+const { runAllRules, detectCrossContractLeak } = require("./rules");
 const { buildTraceJson, buildTraceMd } = require("./report");
 
 function main() {
@@ -26,6 +26,8 @@ function main() {
   const allContracts = [];
   const allFindings = [];
   const scannedFiles = [];
+  // Map contract name -> contract analysis (for cross-contract lookup)
+  const contractMap = new Map();
 
   for (const filePath of solFiles) {
     scannedFiles.push(filePath);
@@ -34,7 +36,6 @@ function main() {
     if (result.error) {
       console.warn(`Warning: parse error in ${filePath}: ${result.error}`);
       console.warn("Falling back to regex-only analysis.");
-      // Regex fallback
       const source = fs.readFileSync(filePath, "utf8");
       const lines = source.split("\n");
       const { runAllRules: runRules } = require("./rules");
@@ -45,9 +46,20 @@ function main() {
 
     const { contracts, source, lines } = result;
     allContracts.push(...contracts);
+    for (const c of contracts) {
+      contractMap.set(c.name, c);
+    }
 
     const findings = runAllRules(contracts, source, lines, filePath);
     allFindings.push(...findings);
+  }
+
+  // Cross-contract analysis (one level deep)
+  if (solFiles.length > 1) {
+    // Build import graph: for each file, resolve which contracts are imported
+    const importGraph = buildImportGraph(solFiles, resolvedTarget);
+    const crossFindings = detectCrossContractLeak(allContracts, contractMap, importGraph);
+    allFindings.push(...crossFindings);
   }
 
   // Re-number all findings globally
@@ -68,6 +80,46 @@ function main() {
   console.log(`Scanned ${solFiles.length} file(s), ${allContracts.length} contract(s).`);
   console.log(`Found ${allFindings.length} finding(s).`);
   console.log(`Output: ${outputDir}/trace.json, ${outputDir}/trace.md`);
+}
+
+function buildImportGraph(solFiles, baseDir) {
+  // Maps contractName -> [imported contract names]
+  const graph = new Map();
+  const stat = fs.statSync(baseDir);
+  const dir = stat.isDirectory() ? baseDir : path.dirname(baseDir);
+
+  for (const filePath of solFiles) {
+    const source = fs.readFileSync(filePath, "utf8");
+    const imports = extractImports(source);
+    // Extract contract names from each file
+    const contractNames = extractContractNames(source);
+    // Resolve local imports to contract names
+    const importedContracts = [];
+    for (const imp of imports) {
+      // Only follow local/relative imports
+      if (imp.startsWith("./") || imp.startsWith("../")) {
+        const resolved = path.resolve(path.dirname(filePath), imp);
+        if (fs.existsSync(resolved)) {
+          const importedSource = fs.readFileSync(resolved, "utf8");
+          importedContracts.push(...extractContractNames(importedSource));
+        }
+      }
+    }
+    for (const name of contractNames) {
+      graph.set(name, importedContracts);
+    }
+  }
+  return graph;
+}
+
+function extractContractNames(source) {
+  const names = [];
+  const regex = /contract\s+(\w+)/g;
+  let m;
+  while ((m = regex.exec(source)) !== null) {
+    names.push(m[1]);
+  }
+  return names;
 }
 
 function collectSolFiles(target) {

@@ -83,4 +83,15 @@ console.log("Test: trace.json structure");
   console.log("  PASS");
 }
 
+// Cross-contract leak: AP-006-EXT
+console.log("Test: dirty-cross-contract-leak flags AP-006-EXT");
+{
+  const { trace } = run("dirty-cross-contract-leak");
+  assert(trace.findings.length >= 1, "Expected at least 1 finding");
+  const extFindings = trace.findings.filter(f => f.rule === "AP-006-EXT");
+  assert(extFindings.length >= 1, "Expected AP-006-EXT finding");
+  assert(extFindings[0].message.includes("Cross-contract"), "Expected cross-contract message");
+  console.log("  PASS");
+}
+
 console.log("\nAll tests passed.");

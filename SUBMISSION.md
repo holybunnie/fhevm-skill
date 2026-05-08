@@ -151,19 +151,19 @@ Both contracts are deployed and verified on Sepolia:
 
 | Contract | Address | Etherscan |
 |----------|---------|-----------|
-| MockCUSDT | `0xb0740ACfea29B8ae9B4cc7103e540bde8CCE2439` | [Verified](https://sepolia.etherscan.io/address/0xb0740ACfea29B8ae9B4cc7103e540bde8CCE2439#code) |
-| ConfidentialLending | `0x9aB9352cEFf6BF1375017122eEaD343bd12E2B90` | [Verified](https://sepolia.etherscan.io/address/0x9aB9352cEFf6BF1375017122eEaD343bd12E2B90#code) |
+| MockCUSDT | `0x8D6ADb0C749bf59252709B3edd5772780e1C3Ec0` | [Verified](https://sepolia.etherscan.io/address/0x8D6ADb0C749bf59252709B3edd5772780e1C3Ec0#code) |
+| ConfidentialLending | `0xAA836099a011e5a15e46898B2C7A1999a2aec3Bd` | [Verified](https://sepolia.etherscan.io/address/0xAA836099a011e5a15e46898B2C7A1999a2aec3Bd#code) |
 
 ## Frontend Integration
 
 A `frontend/SKILL.md` (770+ lines) covers:
-- Client-side encryption with `@zama-fhe/relayer-sdk`
+- Client-side encryption with `@zama-fhe/relayer-sdk/web` (browser bundle with WASM + `initSDK()`)
 - Two decryption paths: `publicDecrypt` and `userDecrypt` (EIP-712)
 - `checkSignatures` for on-chain verification
 - Common frontend bugs and fixes
 - Complete React component example
 
-The example frontend (Vite + React + Tailwind + viem) includes: wallet connect, deposit, borrow, repay, encrypted balance display, and network switching (Hardhat/Sepolia).
+The example frontend (Vite + React + Tailwind + viem) includes: wallet connect, mint cUSDT, deposit, withdraw, borrow, repay, encrypted balance decryption (EIP-712 `userDecrypt`), and network switching (Hardhat/Sepolia).
 
 ## Results
 
@@ -172,15 +172,22 @@ The example frontend (Vite + React + Tailwind + viem) includes: wallet connect, 
 | SKILL.md lines | 1200+ |
 | Frontend SKILL.md lines | 770+ |
 | Anti-patterns documented | 13 |
-| Trace rules implemented | 4 (AST + regex) |
+| Trace rules implemented | 5 (AST + regex + cross-contract) |
 | Attack templates | 5 |
 | Reference contracts | 3 (MockCUSDT, ConfidentialLending, broken variant) |
 | Sepolia contracts deployed | 2 (both verified) |
 | Closed-loop validated | Broken: 2 exploits, Patched: 0 findings |
 
+## Cross-Contract Trace (AP-006-EXT)
+
+The static analyzer follows Solidity `import` statements one level deep. When Contract A persistent-allows a handle to Contract B and calls `B.method(handle)`, and B does `FHE.allow(result, msg.sender)`, the tool flags this as AP-006-EXT — the OpenZeppelin FHEVM security guide's flagship cross-contract vulnerability.
+
+An attacker proxy P calling `A.someEntry()` can route the handle through B, get the result allowed to P (since `msg.sender` inside B is A, and P controls A's entry point), and disclosure-leak encrypted data.
+
+The fixture at `tools/fhevm-trace/test/fixtures/dirty-cross-contract-leak/` demonstrates this with two contracts (ContractA + HelperB).
+
 ## Future Work
 
-- **Cross-contract trace (v2)**: Follow imports one level deep to detect ACL leaks across contract boundaries (e.g., the OpenZeppelin `msg.sender` vulnerability)
 - Additional attack templates for AP-012 (overflow) and AP-013 (arbitrary execute)
 - Mainnet deployment support
 - VS Code extension for inline trace warnings

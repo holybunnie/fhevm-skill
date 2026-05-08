@@ -30,6 +30,16 @@ export const lendingAbi = [
     outputs: [],
   },
   {
+    name: "withdraw",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "encAmount", type: "bytes32" },
+      { name: "proof", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
     name: "getCollateral",
     type: "function",
     stateMutability: "view",

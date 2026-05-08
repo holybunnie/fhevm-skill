@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toHex } from "viem";
 import { getFhevmInstance } from "../lib/fhevm";
 import { getWalletClient, publicClient } from "../lib/client";
 import { lendingAbi } from "../lib/abis";
@@ -22,7 +23,7 @@ export function BorrowPanel({ account }: { account: `0x${string}` }) {
       const walletClient = getWalletClient();
       const hash = await walletClient.writeContract({
         address: LENDING, abi: lendingAbi, functionName: "borrow",
-        args: [encrypted.handles[0], encrypted.inputProof], account,
+        args: [toHex(encrypted.handles[0]), toHex(encrypted.inputProof)], account,
       });
 
       setStatus("Confirming...");

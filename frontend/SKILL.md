@@ -46,7 +46,7 @@ Create `.env`:
 VITE_NETWORK=hardhat          # or "sepolia"
 VITE_LENDING_CONTRACT_ADDRESS=0x...
 VITE_CUSDT_CONTRACT_ADDRESS=0x...
-VITE_RELAYER_URL=https://relayer.zama.ai
+VITE_RELAYER_URL=https://relayer.testnet.zama.org
 ```
 
 ### viem client setup
@@ -78,26 +78,42 @@ export { chain };
 
 ### Relayer instance setup
 
+**Critical: You MUST import from `@zama-fhe/relayer-sdk/web`** (the browser bundle), NOT from `@zama-fhe/relayer-sdk` (the Node/CLI entry point). The bare import lacks the WASM initialization and browser-compatible crypto needed for client-side encryption.
+
 ```typescript
 // src/lib/fhevm.ts
-import { FhevmInstance, createInstance } from "@zama-fhe/relayer-sdk";
-import { chain, publicClient } from "./client";
+type FhevmInstance = import("@zama-fhe/relayer-sdk/web").FhevmInstance;
 
-let instance: FhevmInstance | null = null;
+let instancePromise: Promise<FhevmInstance> | undefined;
 
 export async function getFhevmInstance(): Promise<FhevmInstance> {
-  if (instance) return instance;
+  if (!instancePromise) {
+    instancePromise = (async () => {
+      const { initSDK, createInstance, SepoliaConfig } = await import("@zama-fhe/relayer-sdk/web");
+      await initSDK();
+      return createInstance({
+        ...SepoliaConfig,
+        relayerUrl: import.meta.env.VITE_RELAYER_URL || SepoliaConfig.relayerUrl,
+        network: (globalThis as any).ethereum,
+      });
+    })();
+  }
+  return instancePromise;
+}
 
-  instance = await createInstance({
-    chainId: chain.id,
-    publicClient,
-  });
-
-  return instance;
+export function resetFhevmInstance() {
+  instancePromise = undefined;
 }
 ```
 
-**Common bug: relayer instance storage.** Always cache the instance in a module-level variable. Creating a new instance on every render wastes resources and can cause handle mismatches. Never store the instance in React state — it's not serializable and will break on re-render.
+**Why this pattern matters:**
+1. **`initSDK()`** must be called before `createInstance` — it loads the WASM crypto module. Skipping this causes "Cannot read property" errors when fetching the public key.
+2. **`SepoliaConfig`** provides the correct relayer URL (`https://relayer.testnet.zama.org`), chain ID, gateway address, and ACL address. Do not manually configure these.
+3. **`network: window.ethereum`** passes the browser wallet provider directly — the SDK uses it to read chain state. Do NOT pass a viem `publicClient` here.
+4. **Dynamic `import()`** keeps the WASM bundle out of the initial chunk (it's ~2MB).
+5. **Cache the promise**, not the resolved instance — this prevents race conditions if multiple components call `getFhevmInstance()` simultaneously.
+
+**Common bug: using the wrong import path.** Importing from `@zama-fhe/relayer-sdk` (without `/web`) gives you the Node.js entry point, which fails in the browser with "Impossible to fetch public key: wrong relayer url" because it doesn't initialize the WASM module or browser crypto. Always use `@zama-fhe/relayer-sdk/web` for frontend code.
 
 ## 3. Encrypting input client-side
 
@@ -280,33 +296,45 @@ async function publicDecryptValue(handle: `0x${string}`): Promise<bigint> {
 For handles where the contract called `FHE.allow(handle, userAddress)`, only that user can decrypt. They must sign an EIP-712 request.
 
 ```typescript
+import { BrowserProvider } from "ethers";
 import { getFhevmInstance } from "../lib/fhevm";
-import { getWalletClient, publicClient, chain } from "../lib/client";
 
 async function userDecryptBalance(
-  contractAddress: `0x${string}`,
-  handle: `0x${string}`,
-): Promise<bigint> {
+  handles: { handle: `0x${string}`; contractAddress: `0x${string}` }[],
+  userAddress: `0x${string}`,
+): Promise<bigint[]> {
   const fhevm = await getFhevmInstance();
-  const walletClient = getWalletClient();
-  const [account] = await walletClient.getAddresses();
 
-  // Step 1: Generate the EIP-712 typed data for the decrypt request
-  const { publicKey, signature } = await fhevm.generateDecryptionKeys(
-    contractAddress,
-    account,
-    walletClient,
+  // Step 1: Generate a keypair for this decrypt session
+  const keypair = fhevm.generateKeypair();
+
+  // Step 2: Build the EIP-712 message
+  const contractAddresses = [...new Set(handles.map(h => h.contractAddress))];
+  const startTimeStamp = Math.floor(Date.now() / 1000);
+  const durationDays = 10;
+  const eip712 = fhevm.createEIP712(
+    keypair.publicKey, contractAddresses, startTimeStamp, durationDays
   );
 
-  // Step 2: Request decryption from the relayer
-  const cleartext = await fhevm.userDecrypt(
-    handle,
-    contractAddress,
-    account,
-    { publicKey, signature },
+  // Step 3: User signs the EIP-712 typed data
+  const signer = await new BrowserProvider(window.ethereum).getSigner();
+  const signature = await signer.signTypedData(
+    eip712.domain,
+    { UserDecryptRequestVerification: [...eip712.types.UserDecryptRequestVerification] },
+    eip712.message
   );
 
-  return cleartext;
+  // Step 4: Request decryption from the relayer
+  return fhevm.userDecrypt(
+    handles,
+    keypair.privateKey,
+    keypair.publicKey,
+    signature.replace("0x", ""),
+    contractAddresses,
+    userAddress,
+    startTimeStamp,
+    durationDays
+  );
 }
 ```
 
@@ -334,38 +362,46 @@ function handleChainSwitch() {
 }
 ```
 
-Add the reset function to your fhevm module:
+The `resetFhevmInstance()` function is already defined in the `src/lib/fhevm.ts` module above — it sets `instancePromise = undefined` so the next call re-initializes with the new chain's config.
+
+### Caching decrypt keypairs and signatures
+
+The `signTypedData` call prompts the user for a wallet signature. Cache the keypair and signature to avoid repeated popups within the same session:
 
 ```typescript
-// src/lib/fhevm.ts — add this
-export function resetFhevmInstance() {
-  instance = null;
-}
-```
+type DecryptSession = {
+  keypair: { publicKey: Uint8Array; privateKey: Uint8Array };
+  signature: string;
+  startTimeStamp: number;
+  durationDays: number;
+};
 
-### Caching decrypt keys
+const decryptSessionCache = new Map<string, DecryptSession>();
 
-`generateDecryptionKeys` prompts the user for a wallet signature. Cache the result to avoid repeated signature popups:
-
-```typescript
-const decryptKeyCache = new Map<string, { publicKey: Uint8Array; signature: string }>();
-
-async function getCachedDecryptKeys(
-  contractAddress: `0x${string}`,
+async function getCachedDecryptSession(
+  contractAddresses: `0x${string}`[],
   account: `0x${string}`,
-  walletClient: any,
   fhevm: FhevmInstance,
-) {
-  const key = `${contractAddress}-${account}`;
-  if (decryptKeyCache.has(key)) return decryptKeyCache.get(key)!;
+): Promise<DecryptSession> {
+  const key = `${contractAddresses.sort().join(",")}-${account}`;
+  if (decryptSessionCache.has(key)) return decryptSessionCache.get(key)!;
 
-  const keys = await fhevm.generateDecryptionKeys(
-    contractAddress,
-    account,
-    walletClient,
+  const keypair = fhevm.generateKeypair();
+  const startTimeStamp = Math.floor(Date.now() / 1000);
+  const durationDays = 10;
+  const eip712 = fhevm.createEIP712(keypair.publicKey, contractAddresses, startTimeStamp, durationDays);
+
+  const { BrowserProvider } = await import("ethers");
+  const signer = await new BrowserProvider(window.ethereum).getSigner();
+  const signature = await signer.signTypedData(
+    eip712.domain,
+    { UserDecryptRequestVerification: [...eip712.types.UserDecryptRequestVerification] },
+    eip712.message
   );
-  decryptKeyCache.set(key, keys);
-  return keys;
+
+  const session = { keypair, signature: signature.replace("0x", ""), startTimeStamp, durationDays };
+  decryptSessionCache.set(key, session);
+  return session;
 }
 ```
 
@@ -498,22 +534,32 @@ export function LendingPanel() {
 
       // Decrypt using userDecrypt (requires EIP-712 signature)
       const fhevm = await getFhevmInstance();
-      const walletClient = getWalletClient();
+      const keypair = fhevm.generateKeypair();
+      const contractAddresses = [LENDING_ADDRESS];
+      const startTimeStamp = Math.floor(Date.now() / 1000);
+      const durationDays = 10;
+      const eip712 = fhevm.createEIP712(keypair.publicKey, contractAddresses, startTimeStamp, durationDays);
 
-      const { publicKey, signature } = await fhevm.generateDecryptionKeys(
-        LENDING_ADDRESS,
-        account,
-        walletClient,
+      const { BrowserProvider } = await import("ethers");
+      const signer = await new BrowserProvider(window.ethereum).getSigner();
+      const signature = await signer.signTypedData(
+        eip712.domain,
+        { UserDecryptRequestVerification: [...eip712.types.UserDecryptRequestVerification] },
+        eip712.message
       );
 
-      const clear = await fhevm.userDecrypt(
-        handle,
-        LENDING_ADDRESS,
+      const results = await fhevm.userDecrypt(
+        [{ handle, contractAddress: LENDING_ADDRESS }],
+        keypair.privateKey,
+        keypair.publicKey,
+        signature.replace("0x", ""),
+        contractAddresses,
         account,
-        { publicKey, signature },
+        startTimeStamp,
+        durationDays
       );
 
-      setCollateral(clear.toString());
+      setCollateral(results[0].toString());
       setStatus("Ready");
     } catch (err: any) {
       setStatus(`Decrypt error: ${err.message}`);
@@ -566,7 +612,7 @@ export function LendingPanel() {
 
 1. **Encrypt before send** — `createEncryptedInput` then `add64` then `encrypt` then pass `handles[0]` + `inputProof` to the contract
 2. **Read encrypted handle** — `readContract` returns a `bytes32` handle, not the plaintext
-3. **Decrypt with user signature** — `generateDecryptionKeys` prompts for EIP-712 signature, then `userDecrypt` returns the cleartext
+3. **Decrypt with user signature** — `generateKeypair` + `createEIP712` + `signTypedData` + `userDecrypt` returns the cleartext
 4. **Status feedback** — Each async step updates the UI so the user knows what's happening
 
 ## 9. Common frontend bugs and fixes
@@ -577,10 +623,10 @@ export function LendingPanel() {
 // WRONG — instance is not serializable, breaks on re-render
 const [fhevm, setFhevm] = useState<FhevmInstance | null>(null);
 useEffect(() => {
-  createInstance({ chainId, publicClient }).then(setFhevm);
+  getFhevmInstance().then(setFhevm);
 }, []);
 
-// RIGHT — module-level singleton
+// RIGHT — module-level singleton with cached promise
 // See src/lib/fhevm.ts pattern above
 ```
 
@@ -667,7 +713,7 @@ export function getChainConfig(network: NetworkName) {
       return {
         chain: sepolia,
         transport: "https",
-        relayerUrl: "https://relayer.zama.ai",
+        relayerUrl: "https://relayer.testnet.zama.org",
       };
     case "hardhat":
     default:
@@ -717,10 +763,12 @@ export interface EncryptedInput {
   inputProof: `0x${string}`;
 }
 
-/** Decryption keys from generateDecryptionKeys */
-export interface DecryptionKeys {
-  publicKey: Uint8Array;
+/** Decryption session from generateKeypair + signTypedData */
+export interface DecryptSession {
+  keypair: { publicKey: Uint8Array; privateKey: Uint8Array };
   signature: string;
+  startTimeStamp: number;
+  durationDays: number;
 }
 
 /** Supported encrypted types for add methods */

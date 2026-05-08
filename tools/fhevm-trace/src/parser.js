@@ -346,4 +346,24 @@ function mapGrantType(method) {
   }
 }
 
-module.exports = { parseFile, ENCRYPTED_TYPES };
+function extractImports(source) {
+  const imports = [];
+  const regex = /import\s+.*?from\s+["']([^"']+)["']/g;
+  let m;
+  while ((m = regex.exec(source)) !== null) {
+    imports.push(m[1]);
+  }
+  // Also match: import "path";
+  const regex2 = /import\s+["']([^"']+)["']\s*;/g;
+  while ((m = regex2.exec(source)) !== null) {
+    imports.push(m[1]);
+  }
+  // Also match: import { X } from "path";
+  const regex3 = /import\s+\{[^}]*\}\s+from\s+["']([^"']+)["']/g;
+  while ((m = regex3.exec(source)) !== null) {
+    imports.push(m[1]);
+  }
+  return [...new Set(imports)];
+}
+
+module.exports = { parseFile, extractImports, ENCRYPTED_TYPES };
