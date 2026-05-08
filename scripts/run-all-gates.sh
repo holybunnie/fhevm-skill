@@ -106,6 +106,15 @@ echo "$RULES" | grep -q "AP-009" || (echo "FAIL: broken contract missing AP-009 
 echo "$RULES" | grep -q "AP-011" || (echo "FAIL: broken contract missing AP-011 finding" && exit 1)
 echo "STAGE 5.2: broken contract findings OK ($RULES)"
 
+# Run attack tests against broken contract (exploits should succeed)
+npx hardhat test test/attacks/ 2>&1 | tail -5
+echo "STAGE 5.3: broken contract attack tests OK"
+
+# Run attack tests against patched contract in EXPECT_BLOCKED mode
+# This proves the patched contract actually blocks the exploits
+EXPECT_BLOCKED=1 npx hardhat test test/attacks/F-001-AP-011.test.ts 2>&1 | tail -5
+echo "STAGE 5.4: patched contract EXPECT_BLOCKED OK"
+
 echo ""
 echo "=== STAGE 6: Frontend ==="
 cd "$REPO/examples/confidential-lending-app/frontend"

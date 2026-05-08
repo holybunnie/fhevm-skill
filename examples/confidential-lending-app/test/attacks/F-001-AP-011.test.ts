@@ -49,21 +49,30 @@ describe("Attack: reorg-disclosure (F-001 / AP-011)", function () {
     // 3. Reorg replaces block N — Bidder A is no longer the winner
     // 4. But A already decrypted the value in step 2
 
-    // We verify the pattern exists by confirming the contract is deployed
-    // and the finding is structurally valid.
+    // We verify the pattern by checking whether the vulnerable function exists.
+    // The buggy contract exposes a function that finalizes AND discloses in one tx.
+    // The patched contract removes or splits that function.
     const contractCode = await ethers.provider.getCode(lendingAddr);
-    expect(contractCode).to.not.eq("0x");
+    expect(contractCode).to.not.eq("0x", "Contract should be deployed");
+
+    // Check whether the flagged function exists on the deployed contract
+    const iface = lending.interface;
+    const hasVulnerableFunction = iface.fragments.some(
+      (f: any) => f.type === "function" && f.name === "liquidate"
+    );
 
     // Revert to snapshot (simulating reorg)
     await snapshotId.restore();
 
     if (EXPECT_BLOCKED) {
-      // Patched contract uses two-phase disclosure with finality delay
-      // makePubliclyDecryptable is in a separate function from finalization
-      expect(true).to.be.true;
+      // Patched contract should not expose the vulnerable function, or should
+      // split disclosure into a separate finality-delayed transaction
+      expect(hasVulnerableFunction).to.eq(false,
+        "Patched contract should remove or rename the vulnerable function");
     } else {
-      // Buggy contract discloses in same tx as finalization — reorg-vulnerable
-      expect(true).to.be.true;
+      // Buggy contract exposes atomic finalize+disclose — reorg-vulnerable
+      expect(hasVulnerableFunction).to.eq(true,
+        "Buggy contract should have the vulnerable function that discloses in same tx");
     }
   });
 });
