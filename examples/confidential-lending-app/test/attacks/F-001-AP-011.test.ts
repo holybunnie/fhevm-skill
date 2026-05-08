@@ -1,6 +1,6 @@
 // Attack: reorg-disclosure (AP-011)
 // Finding: F-001 / AP-011
-// Target: liquidate at /Users/user/fhevm-skill/examples/confidential-lending-app/contracts/broken/ConfidentialLending.broken.sol:87
+// Target: liquidate at /Users/user/fhevm-skill/examples/confidential-lending-app/contracts/ConfidentialLending.sol:87
 //
 // Scenario: An auction finalizes and immediately makes the winning bid publicly
 // decryptable in the same transaction. Using evm_snapshot/evm_revert (simulating a reorg),
@@ -26,7 +26,7 @@ describe("Attack: reorg-disclosure (F-001 / AP-011)", function () {
     const token = await TokenFactory.deploy();
     const tokenAddr = await token.getAddress();
 
-    const LendingFactory = await ethers.getContractFactory("ConfidentialLendingBroken");
+    const LendingFactory = await ethers.getContractFactory("ConfidentialLending");
     const lending = await LendingFactory.deploy(tokenAddr);
     const lendingAddr = await lending.getAddress();
 

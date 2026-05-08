@@ -1,6 +1,6 @@
 // Attack: silent-failure-bid (AP-009)
 // Finding: F-002 / AP-009
-// Target: unknown at /Users/user/fhevm-skill/examples/confidential-lending-app/contracts/broken/ConfidentialLending.broken.sol:75
+// Target: unknown at /Users/user/fhevm-skill/examples/confidential-lending-app/contracts/ConfidentialLending.sol:75
 //
 // Scenario: Mallory submits an encrypted bid but has zero token balance.
 // The confidential token transfer silently returns zero (cannot revert on encrypted balance check).
@@ -25,7 +25,7 @@ describe("Attack: silent-failure-bid (F-002 / AP-009)", function () {
     const tokenAddr = await token.getAddress();
 
     // Deploy lending/bidding contract
-    const LendingFactory = await ethers.getContractFactory("ConfidentialLendingBroken");
+    const LendingFactory = await ethers.getContractFactory("ConfidentialLending");
     const lending = await LendingFactory.deploy(tokenAddr);
     const lendingAddr = await lending.getAddress();
 

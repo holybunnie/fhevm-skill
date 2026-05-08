@@ -4,15 +4,15 @@ pragma solidity ^0.8.24;
 import { FHE, euint64, externalEuint64, ebool } from "@fhevm/solidity/lib/FHE.sol";
 import { ZamaEthereumConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
 
-interface ICUSDT_Broken {
+interface ICUSDT {
     function transfer(address to, euint64 amount) external returns (euint64);
     function balanceOf(address account) external view returns (euint64);
 }
 
-/// @title ConfidentialLendingBroken — intentionally buggy for trace/attack testing
+/// @title ConfidentialLending — intentionally buggy for trace/attack testing
 /// @notice Contains two bugs: AP-009 (ignored return) and AP-011 (premature disclosure)
-contract ConfidentialLendingBroken is ZamaEthereumConfig {
-    ICUSDT_Broken public immutable token;
+contract ConfidentialLending is ZamaEthereumConfig {
+    ICUSDT public immutable token;
 
     mapping(address => euint64) private _collateral;
     mapping(address => euint64) private _debt;
@@ -21,7 +21,7 @@ contract ConfidentialLendingBroken is ZamaEthereumConfig {
     uint64 public constant LTV_DENOMINATOR = 100;
 
     constructor(address _token) {
-        token = ICUSDT_Broken(_token);
+        token = ICUSDT(_token);
     }
 
     /// @notice Deposit — BUG: AP-009 ignores transfer return value
