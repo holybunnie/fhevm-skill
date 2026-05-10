@@ -1103,6 +1103,17 @@ Write contract
   Deploy to Sepolia
 ```
 
+## Full dApp mode (activated by default)
+
+When the user gives any natural-language request (e.g. "Build a confidential lending contract...", "Create a sealed-bid auction...", "Make a confidential voting dApp..."), treat it as a request to build a **complete, production-ready FHEVM dApp**.
+
+Automatically:
+- Create or update a full dApp inside `examples/<descriptive-name>/` (contracts/, test/, frontend/, scripts/, hardhat.config.ts, package.json).- Use the hardened templates in `templates/` as starting point.- Run the full closed-loop workflow: write → `fhevm-trace` → `fhevm-attack` → patch → re-verify happy-path tests.- Include a working React + Vite + viem frontend with client-side encryption and userDecrypt flow.- Deploy to Sepolia (if credentials are available) and update `DEPLOYMENT.md` with verified addresses + Etherscan links.- Cite relevant AP IDs in comments and never skip verification gates.- **Always produce high-quality, clean, well-commented code** that strictly follows v0.9+ patterns, passes every verification gate, and contains zero deprecated APIs or anti-patterns.
+
+Continue until the dApp is fully built, tested, attacked, patched, and deployed. Do not stop after just writing contracts. Always produce a complete, runnable, high-quality dApp.
+
+This capability is now active by default for every user request.
+
 ## Frontend integration
 
 Frontend apps interact with FHEVM contracts by encrypting input client-side, sending encrypted calldata, and decrypting results via the relayer SDK. The `@zama-fhe/relayer-sdk` handles the KMS communication, EIP-712 signing, and proof verification.
