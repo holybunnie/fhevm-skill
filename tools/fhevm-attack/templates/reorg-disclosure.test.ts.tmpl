@@ -17,6 +17,9 @@ import { FhevmType } from "@fhevm/hardhat-plugin";
 import * as helpers from "@nomicfoundation/hardhat-network-helpers";
 
 const EXPECT_BLOCKED = process.env.EXPECT_BLOCKED === "1";
+const TARGET_CONTRACT_NAME = EXPECT_BLOCKED
+  ? process.env.PATCHED_CONTRACT_NAME || "{{CONTRACT_NAME}}"
+  : "{{CONTRACT_NAME}}";
 
 describe("Attack: reorg-disclosure ({{FINDING_ID}} / {{RULE}})", function () {
   async function deployFixture() {
@@ -26,7 +29,7 @@ describe("Attack: reorg-disclosure ({{FINDING_ID}} / {{RULE}})", function () {
     const token = await TokenFactory.deploy();
     const tokenAddr = await token.getAddress();
 
-    const LendingFactory = await ethers.getContractFactory("{{CONTRACT_NAME}}");
+    const LendingFactory = await ethers.getContractFactory(TARGET_CONTRACT_NAME);
     const lending = await LendingFactory.deploy(tokenAddr);
     const lendingAddr = await lending.getAddress();
 

@@ -1,6 +1,6 @@
 // Attack: silent-failure-bid (AP-009)
 // Finding: F-002 / AP-009
-// Target: unknown at /Users/user/fhevm-skill/examples/confidential-lending-app/contracts/ConfidentialLending.sol:75
+// Target: unknown at /Users/user/fhevm-skill/examples/confidential-lending-app/contracts/broken/ConfidentialLending.broken.sol:75
 //
 // Scenario: Mallory submits an encrypted bid but has zero token balance.
 // The confidential token transfer silently returns zero (cannot revert on encrypted balance check).
@@ -14,6 +14,9 @@ import { ethers, fhevm } from "hardhat";
 import { FhevmType } from "@fhevm/hardhat-plugin";
 
 const EXPECT_BLOCKED = process.env.EXPECT_BLOCKED === "1";
+const TARGET_CONTRACT_NAME = EXPECT_BLOCKED
+  ? process.env.PATCHED_CONTRACT_NAME || "ConfidentialLendingBroken"
+  : "ConfidentialLendingBroken";
 
 describe("Attack: silent-failure-bid (F-002 / AP-009)", function () {
   async function deployFixture() {
@@ -25,7 +28,7 @@ describe("Attack: silent-failure-bid (F-002 / AP-009)", function () {
     const tokenAddr = await token.getAddress();
 
     // Deploy lending/bidding contract
-    const LendingFactory = await ethers.getContractFactory("ConfidentialLending");
+    const LendingFactory = await ethers.getContractFactory(TARGET_CONTRACT_NAME);
     const lending = await LendingFactory.deploy(tokenAddr);
     const lendingAddr = await lending.getAddress();
 

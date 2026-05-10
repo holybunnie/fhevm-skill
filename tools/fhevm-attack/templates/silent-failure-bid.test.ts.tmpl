@@ -14,6 +14,9 @@ import { ethers, fhevm } from "hardhat";
 import { FhevmType } from "@fhevm/hardhat-plugin";
 
 const EXPECT_BLOCKED = process.env.EXPECT_BLOCKED === "1";
+const TARGET_CONTRACT_NAME = EXPECT_BLOCKED
+  ? process.env.PATCHED_CONTRACT_NAME || "{{CONTRACT_NAME}}"
+  : "{{CONTRACT_NAME}}";
 
 describe("Attack: silent-failure-bid ({{FINDING_ID}} / {{RULE}})", function () {
   async function deployFixture() {
@@ -25,7 +28,7 @@ describe("Attack: silent-failure-bid ({{FINDING_ID}} / {{RULE}})", function () {
     const tokenAddr = await token.getAddress();
 
     // Deploy lending/bidding contract
-    const LendingFactory = await ethers.getContractFactory("{{CONTRACT_NAME}}");
+    const LendingFactory = await ethers.getContractFactory(TARGET_CONTRACT_NAME);
     const lending = await LendingFactory.deploy(tokenAddr);
     const lendingAddr = await lending.getAddress();
 

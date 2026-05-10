@@ -1,6 +1,6 @@
 // Attack: reorg-disclosure (AP-011)
 // Finding: F-001 / AP-011
-// Target: liquidate at /Users/user/fhevm-skill/examples/confidential-lending-app/contracts/ConfidentialLending.sol:87
+// Target: liquidate at /Users/user/fhevm-skill/examples/confidential-lending-app/contracts/broken/ConfidentialLending.broken.sol:87
 //
 // Scenario: An auction finalizes and immediately makes the winning bid publicly
 // decryptable in the same transaction. Using evm_snapshot/evm_revert (simulating a reorg),
@@ -17,6 +17,9 @@ import { FhevmType } from "@fhevm/hardhat-plugin";
 import * as helpers from "@nomicfoundation/hardhat-network-helpers";
 
 const EXPECT_BLOCKED = process.env.EXPECT_BLOCKED === "1";
+const TARGET_CONTRACT_NAME = EXPECT_BLOCKED
+  ? process.env.PATCHED_CONTRACT_NAME || "ConfidentialLendingBroken"
+  : "ConfidentialLendingBroken";
 
 describe("Attack: reorg-disclosure (F-001 / AP-011)", function () {
   async function deployFixture() {
@@ -26,7 +29,7 @@ describe("Attack: reorg-disclosure (F-001 / AP-011)", function () {
     const token = await TokenFactory.deploy();
     const tokenAddr = await token.getAddress();
 
-    const LendingFactory = await ethers.getContractFactory("ConfidentialLending");
+    const LendingFactory = await ethers.getContractFactory(TARGET_CONTRACT_NAME);
     const lending = await LendingFactory.deploy(tokenAddr);
     const lendingAddr = await lending.getAddress();
 
