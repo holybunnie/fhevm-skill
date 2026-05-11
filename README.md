@@ -200,3 +200,9 @@ fhevm-skill/
   DEPLOYMENT.md                         # Sepolia addresses + Etherscan links
   SUBMISSION.md                         # Community post
 ```
+
+## Footer
+
+Demo video: https://youtu.be/7yFHFRjHSD8?si=t0ULviRn6N3FVumG
+
+Developed by: x.com/holybunnie3
