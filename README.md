@@ -205,4 +205,4 @@ fhevm-skill/
 
 Demo video: https://youtu.be/7yFHFRjHSD8?si=t0ULviRn6N3FVumG
 
-Developed by: x.com/holybunnie3
+Developed by [Holybunnie](https://x.com/holybunnie3)
