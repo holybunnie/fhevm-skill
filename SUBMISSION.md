@@ -194,7 +194,7 @@ The fixture at `tools/fhevm-trace/test/fixtures/dirty-cross-contract-leak/` demo
 
 ## Links
 
-- **Repository**: [GitHub link]
-- **Demo video**: [YouTube link placeholder]
+- **Repository**: [https://github.com/holybunnie/fhevm-skill]
+- **Demo video**: [https://youtu.be/7yFHFRjHSD8?si=t0ULviRn6N3FVumG]
 - **Deployed contracts**: See [DEPLOYMENT.md](DEPLOYMENT.md)
 - **Zama docs**: https://docs.zama.ai/fhevm
