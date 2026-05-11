@@ -4,6 +4,8 @@
 
 fhevm-skill provides a **closed feedback loop**: write contracts with SKILL.md guidance, statically analyze them with `fhevm-trace`, generate and run exploit tests with `fhevm-attack`, patch, and deploy. Every step is automated and machine-checkable.
 
+## Demo URL - https://youtu.be/7yFHFRjHSD8?si=t0ULviRn6N3FVumG
+
 ## Core Components
 
 | Component | Description |
